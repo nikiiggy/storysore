@@ -63,13 +63,12 @@ const songs = [
     { id: 61, title: "EMIN ft. JONY - Kamin (MayBae Cover)", src: "https://files.catbox.moe/7hm3h1.mp3", isFavorite: false }
 ];
 
-let currentSongIndex = -1;
+let playQueue = []; // Antrean lagu
+let currentQueueIndex = -1;
 let currentTab = 'all';
 
 // DOM Elements
 const audioPlayer = document.getElementById('audioPlayer');
-const oceanPlayer = document.getElementById('oceanPlayer');
-const campfirePlayer = document.getElementById('campfirePlayer');
 const songListEl = document.getElementById('songList');
 const currentTitleEl = document.getElementById('currentTitle');
 const playPauseBtn = document.getElementById('playPauseBtn');
@@ -164,18 +163,12 @@ function createReverbImpulse(decay, density, diffusion) {
 window.onload = () => {
     renderSongs();
 
-    // Setting Suara Awal Ambient di 20%
-    oceanPlayer.volume = 0.2;
-    campfirePlayer.volume = 0.2;
-
     // First interaction handler
     document.body.addEventListener('click', () => {
         initAudioEffects();
         if (audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
         }
-        if (oceanPlayer.paused) oceanPlayer.play().catch(() => {});
-        if (campfirePlayer.paused) campfirePlayer.play().catch(() => {});
     }, { once: true });
 };
 
@@ -186,10 +179,11 @@ function renderSongs() {
 
     filtered.forEach((song) => {
         const item = document.createElement('div');
-        item.className = `song-item ${songs[currentSongIndex]?.id === song.id ? 'active' : ''}`;
+        const isCurrentSong = playQueue[currentQueueIndex]?.id === song.id;
+        item.className = `song-item ${isCurrentSong ? 'active' : ''}`;
 
         item.innerHTML = `
-            <div class="song-info" onclick="playSongById(${song.id})">
+            <div class="song-info" onclick="addToQueue(${song.id})">
                 <i class="fa-solid fa-music"></i>
                 <span>${song.title}</span>
             </div>
@@ -216,25 +210,26 @@ function filterSongs() {
     });
 }
 
-// Player Controls
-function playSongById(id) {
-    initAudioEffects();
-    if (audioCtx && audioCtx.state === 'suspended') {
-        audioCtx.resume();
+// QUEUE & PLAYER CONTROLS
+function addToQueue(id) {
+    const song = songs.find(s => s.id === id);
+    if (!song) return;
+
+    playQueue.push(song);
+
+    // Jika antrean baru diisi dan tidak ada lagu yang diputar/di-load, siapkan lagu pertama di antrean
+    if (currentQueueIndex === -1) {
+        currentQueueIndex = 0;
+        loadSongFromQueue();
     }
+}
 
-    currentSongIndex = songs.findIndex(s => s.id === id);
-    const song = songs[currentSongIndex];
+function loadSongFromQueue() {
+    if (currentQueueIndex < 0 || currentQueueIndex >= playQueue.length) return;
 
+    const song = playQueue[currentQueueIndex];
     audioPlayer.src = song.src;
     currentTitleEl.innerText = song.title;
-    
-    audioPlayer.play().then(() => {
-        playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-    }).catch(err => {
-        console.error("Gagal memutar audio:", err);
-    });
-
     renderSongs();
 }
 
@@ -244,14 +239,18 @@ function togglePlay() {
         audioCtx.resume();
     }
 
-    if (currentSongIndex === -1 && songs.length > 0) {
-        playSongById(songs[0].id);
+    // Jika antrean kosong saat tombol play ditekan, masukkan lagu pertama dari daftar ke antrean
+    if (playQueue.length === 0 && songs.length > 0) {
+        addToQueue(songs[0].id);
         return;
     }
 
     if (audioPlayer.paused) {
-        audioPlayer.play();
-        playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        audioPlayer.play().then(() => {
+            playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        }).catch(err => {
+            console.error("Gagal memutar audio:", err);
+        });
     } else {
         audioPlayer.pause();
         playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
@@ -259,9 +258,15 @@ function togglePlay() {
 }
 
 function nextSong() {
-    if (songs.length === 0) return;
-    currentSongIndex = (currentSongIndex + 1) % songs.length;
-    playSongById(songs[currentSongIndex].id);
+    if (playQueue.length === 0) return;
+
+    if (currentQueueIndex < playQueue.length - 1) {
+        currentQueueIndex++;
+        loadSongFromQueue();
+        if (!audioPlayer.paused) {
+            audioPlayer.play();
+        }
+    }
 }
 
 function toggleFavorite(e, id) {
@@ -286,6 +291,8 @@ audioPlayer.ontimeupdate = () => {
 audioPlayer.onended = () => {
     if (document.getElementById('autoplayToggle').checked) {
         nextSong();
+    } else {
+        playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
     }
 };
 
@@ -304,32 +311,39 @@ function adjustMusicVolume() {
     audioPlayer.volume = document.getElementById('musicVolume').value;
 }
 
-function adjustOceanVolume() {
-    oceanPlayer.volume = document.getElementById('oceanVolume').value;
-}
-
-function adjustCampfireVolume() {
-    campfirePlayer.volume = document.getElementById('campfireVolume').value;
-}
-
-function toggleOcean() {
-    const btn = document.getElementById('oceanToggleBtn');
-    if (oceanPlayer.paused) {
-        oceanPlayer.play();
-        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+// --- FULLSCREEN FEATURE ---
+function toggleFullscreen() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen) {
+            docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+        } else if (docEl.msRequestFullscreen) {
+            docEl.msRequestFullscreen();
+        }
     } else {
-        oceanPlayer.pause();
-        btn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
     }
 }
 
-function toggleCampfire() {
-    const btn = document.getElementById('campfireToggleBtn');
-    if (campfirePlayer.paused) {
-        campfirePlayer.play();
-        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
+document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+document.addEventListener('msfullscreenchange', updateFullscreenIcon);
+
+function updateFullscreenIcon() {
+    const fsBtn = document.getElementById('fullscreenBtn');
+    if (!fsBtn) return;
+
+    if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+        fsBtn.innerHTML = '<i class="fa-solid fa-compress"></i>';
     } else {
-        campfirePlayer.pause();
-        btn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i>';
+        fsBtn.innerHTML = '<i class="fa-solid fa-expand"></i>';
     }
 }
