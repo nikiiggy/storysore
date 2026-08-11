@@ -42,7 +42,7 @@ html, body {
     inset: 0;
     background: url('bg.gif') no-repeat center center/cover;
     filter: brightness(0.92) saturate(1.05);
-    z-index: -2;
+    z-index: 0;
 }
 
 .bg-overlay::after {
@@ -62,7 +62,7 @@ html, body {
 #fireflyCanvas {
     position: fixed;
     inset: 0;
-    z-index: -1;
+    z-index: 1;
     pointer-events: none;
 }
 
