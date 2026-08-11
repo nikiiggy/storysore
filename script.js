@@ -1,10 +1,10 @@
 // --- 1. CONFIG: LINK API PLAYLIST ---
 const PLAYLIST_API_URL = "https://api.npoint.io/f24ffd31e695999ad25c";
 
-let songs = []; // Data lagu diisi otomatis dari API npoint
-let playQueue = [];
-let currentQueueIndex = -1;
-let currentTab = 'all'; // 'all' | 'favorites' | 'queue'
+let songs = []; // Data lagu diisi dari npoint
+let playQueue = []; // Antrean lagu
+let currentSong = null; // Lagu yang sedang diputar
+let currentTab = 'all'; // 'all' | 'queue'
 
 // DOM Elements
 const audioPlayer = document.getElementById('audioPlayer');
@@ -14,7 +14,7 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 const progressBar = document.getElementById('progressBar');
 const currentTimeEl = document.getElementById('currentTime');
 const durationEl = document.getElementById('duration');
-const fxToggleBtn = document.getElementById('fxToggleBtn');
+const fxToggle = document.getElementById('fxToggle');
 const visualizerCanvas = document.getElementById('visualizer');
 const visCtx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
 const queueBadge = document.getElementById('queueBadge');
@@ -26,7 +26,6 @@ let lowFilter, midFilter, highFilter;
 let wetGain, dryGain, masterGain;
 let analyser, analyserData;
 let isAudioFxInitialized = false;
-let fxEnabled = true;
 let fxSilenceChecked = false;
 let visRafId = null;
 
@@ -84,7 +83,7 @@ function initAudioEffects() {
 
         isAudioFxInitialized = true;
     } catch (e) {
-        console.warn("Web Audio API tidak tersedia / diblokir. Player standar tetap dipakai.", e);
+        console.warn("Web Audio API tidak tersedia / diblokir.", e);
     }
 }
 
@@ -101,11 +100,6 @@ function checkFxSilence() {
                 sourceNode.disconnect();
                 sourceNode.connect(masterGain);
                 masterGain.gain.value = 1.0;
-                console.warn("Lagu ini diproteksi CORS oleh host, efek audio dinonaktifkan otomatis untuk lagu ini.");
-                if (fxToggleBtn) {
-                    fxToggleBtn.classList.add('disabled');
-                    fxToggleBtn.title = "Efek audio tidak tersedia untuk lagu ini (CORS)";
-                }
             } catch (e) { /* noop */ }
         }
     }, 700);
@@ -136,16 +130,12 @@ function createReverbImpulse(decay, density, diffusion) {
 }
 
 function toggleAudioFX() {
-    fxEnabled = !fxEnabled;
-    if (fxToggleBtn) {
-        fxToggleBtn.classList.toggle('active', fxEnabled);
-        fxToggleBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> FX ${fxEnabled ? 'ON' : 'OFF'}`;
-    }
+    const isFxOn = fxToggle ? fxToggle.checked : true;
     if (!isAudioFxInitialized || !audioCtx) return;
     const now = audioCtx.currentTime;
-    wetGain.gain.setTargetAtTime(fxEnabled ? Math.pow(10, -8 / 20) : 0, now, 0.15);
-    lowFilter.gain.setTargetAtTime(fxEnabled ? 3 : 0, now, 0.15);
-    highFilter.gain.setTargetAtTime(fxEnabled ? -10 : 0, now, 0.15);
+    wetGain.gain.setTargetAtTime(isFxOn ? Math.pow(10, -8 / 20) : 0, now, 0.15);
+    lowFilter.gain.setTargetAtTime(isFxOn ? 3 : 0, now, 0.15);
+    highFilter.gain.setTargetAtTime(isFxOn ? -10 : 0, now, 0.15);
 }
 
 // --- FETCH PLAYLIST DATA FROM API ---
@@ -160,12 +150,10 @@ async function fetchPlaylist() {
 
         const data = await response.json();
 
-        // Standardisasi format data lagu
         songs = data.map((song, index) => ({
             id: song.id || index + 1,
             title: song.title || "Unknown Title",
-            src: song.src || "",
-            isFavorite: song.isFavorite || false
+            src: song.src || ""
         }));
 
         renderSongs();
@@ -210,30 +198,17 @@ function showToast(message, icon = 'fa-list-ul') {
     setTimeout(() => toast.remove(), 2600);
 }
 
-// --- Render Song / Favorites / Queue List ---
+// --- Render Song / Queue List ---
 function renderSongs() {
     if (!songListEl) return;
     songListEl.innerHTML = '';
 
-    let list, mode;
-    if (currentTab === 'favorites') {
-        list = songs.filter(s => s.isFavorite);
-        mode = 'library';
-    } else if (currentTab === 'queue') {
-        list = playQueue;
-        mode = 'queue';
-    } else {
-        list = songs;
-        mode = 'library';
-    }
+    const list = currentTab === 'queue' ? playQueue : songs;
 
     if (list.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
-        empty.textContent =
-            currentTab === 'favorites' ? 'Belum ada lagu favorit.' :
-            currentTab === 'queue' ? 'Antrean kosong. Pilih lagu dari Daftar Lagu.' :
-            'Lagu tidak ditemukan.';
+        empty.textContent = currentTab === 'queue' ? 'Antrean kosong. Pilih lagu dari Playlist.' : 'Lagu tidak ditemukan.';
         songListEl.appendChild(empty);
         return;
     }
@@ -241,18 +216,17 @@ function renderSongs() {
     const fragment = document.createDocumentFragment();
     list.forEach((song, i) => {
         const item = document.createElement('div');
-        const isCurrentSong = mode === 'queue' ? i === currentQueueIndex : playQueue[currentQueueIndex]?.id === song.id;
-        item.className = `song-item ${isCurrentSong ? 'active' : ''}`;
+        const isPlayingThis = currentSong?.id === song.id;
+        item.className = `song-item ${isPlayingThis ? 'active' : ''}`;
 
-        const clickAction = mode === 'queue' ? `playFromQueue(${i})` : `addToQueue(${song.id})`;
-        const numberLabel = mode === 'queue' ? `<span class="queue-index">${i + 1}</span>` : `<i class="fa-solid fa-music"></i>`;
+        const clickAction = currentTab === 'queue' ? `playNextInQueue()` : `addToQueue(${song.id})`;
+        const numberLabel = currentTab === 'queue' ? `<span class="queue-index">${i + 1}</span>` : `<i class="fa-solid fa-music"></i>`;
 
         item.innerHTML = `
             <div class="song-info" onclick="${clickAction}">
                 ${numberLabel}
                 <span>${song.title}</span>
             </div>
-            <i class="fa-solid fa-star star-btn ${song.isFavorite ? 'starred' : ''}" onclick="toggleFavorite(event, ${song.id})"></i>
         `;
         fragment.appendChild(item);
     });
@@ -289,42 +263,42 @@ function addToQueue(id) {
     if (!song) return;
 
     playQueue.push(song);
-    showToast(`Ditambahkan ke antrean: ${song.title}`, 'fa-list-ul');
+    showToast(`Masuk Antrean: ${song.title}`, 'fa-list-ul');
     updateQueueBadge();
 
-    if (currentQueueIndex === -1) {
-        currentQueueIndex = 0;
-        loadSongFromQueue();
+    // Jika pemutar sedang berhenti, langsung putar lagu dari antrean
+    if (audioPlayer.paused && !currentSong) {
+        playNextInQueue();
     } else {
         renderSongs();
     }
 }
 
-function playFromQueue(index) {
-    if (index < 0 || index >= playQueue.length) return;
-    currentQueueIndex = index;
-    loadSongFromQueue();
-    playCurrent();
-}
-
-function loadSongFromQueue() {
-    if (currentQueueIndex < 0 || currentQueueIndex >= playQueue.length) return;
-
-    const song = playQueue[currentQueueIndex];
-    audioPlayer.src = song.src;
-    currentTitleEl.innerText = song.title;
-    fxSilenceChecked = false;
-    renderSongs();
+// Memutar lagu dari antrean DAN MENGHAPUSNYA DARI ANTREAN
+function playNextInQueue() {
+    if (playQueue.length > 0) {
+        currentSong = playQueue.shift(); // Ambil dan hapus lagu paling depan di antrean
+        updateQueueBadge();
+        loadAndPlay(currentSong);
+    } else {
+        playRandomSong(); // Jika antrean habis, play random
+    }
 }
 
 function playRandomSong() {
     if (songs.length === 0) return;
     const randomSong = songs[Math.floor(Math.random() * songs.length)];
-    playQueue.push(randomSong);
-    currentQueueIndex = playQueue.length - 1;
-    loadSongFromQueue();
-    updateQueueBadge();
+    currentSong = randomSong;
     showToast(`Memutar acak: ${randomSong.title}`, 'fa-shuffle');
+    loadAndPlay(currentSong);
+}
+
+function loadAndPlay(song) {
+    if (!song) return;
+    audioPlayer.src = song.src;
+    currentTitleEl.innerText = song.title;
+    fxSilenceChecked = false;
+    renderSongs();
     playCurrent();
 }
 
@@ -351,8 +325,8 @@ function pauseCurrent() {
 }
 
 function togglePlay() {
-    if (playQueue.length === 0) {
-        playRandomSong();
+    if (!currentSong) {
+        playNextInQueue();
         return;
     }
     if (audioPlayer.paused) {
@@ -363,36 +337,18 @@ function togglePlay() {
 }
 
 function nextSong() {
-    if (playQueue.length === 0) {
-        playRandomSong();
-        return;
-    }
-    if (currentQueueIndex < playQueue.length - 1) {
-        currentQueueIndex++;
-        loadSongFromQueue();
-        playCurrent();
+    playNextInQueue();
+}
+
+function prevSong() {
+    if (audioPlayer.currentTime > 3) {
+        audioPlayer.currentTime = 0;
     } else {
         playRandomSong();
     }
 }
 
-function prevSong() {
-    if (playQueue.length === 0 || currentQueueIndex <= 0) return;
-    currentQueueIndex--;
-    loadSongFromQueue();
-    playCurrent();
-}
-
-function toggleFavorite(e, id) {
-    e.stopPropagation();
-    const song = songs.find(s => s.id === id);
-    if (song) {
-        song.isFavorite = !song.isFavorite;
-        renderSongs();
-    }
-}
-
-// --- Progress Bar ---
+// --- Progress Bar & Autoplay ---
 audioPlayer.ontimeupdate = () => {
     if (!isNaN(audioPlayer.duration)) {
         progressBar.max = audioPlayer.duration;
@@ -403,8 +359,9 @@ audioPlayer.ontimeupdate = () => {
 };
 
 audioPlayer.onended = () => {
-    if (document.getElementById('autoplayToggle').checked) {
-        nextSong();
+    const autoplay = document.getElementById('autoplayToggle');
+    if (autoplay && autoplay.checked) {
+        playNextInQueue(); // Memutar antrean berikutnya (atau random jika antrean habis)
     } else {
         playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         playPauseBtn.classList.remove('is-playing');
