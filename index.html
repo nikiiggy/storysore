@@ -10,9 +10,11 @@
 </head>
 <body>
 
+    <!-- Background layers -->
     <div class="bg-overlay"></div>
     <canvas id="fireflyCanvas" aria-hidden="true"></canvas>
 
+    <!-- Main Player Box -->
     <div class="app-container">
 
         <header class="player-header">
@@ -25,40 +27,39 @@
 
             <canvas id="visualizer" aria-hidden="true"></canvas>
 
+            <!-- Progress Bar -->
             <div class="progress-container">
                 <span id="currentTime">00:00</span>
                 <input type="range" id="progressBar" value="0" min="0" max="100" onchange="seekSong()" aria-label="Posisi lagu">
                 <span id="duration">00:00</span>
             </div>
 
-            <div class="controls-row">
-                <button class="control-btn" onclick="prevSong()" title="Lagu Sebelumnya" aria-label="Sebelumnya">
+            <!-- Controls -->
+            <div class="controls">
+                <button class="control-btn" id="prevBtn" onclick="prevSong()" title="Lagu Sebelumnya" aria-label="Lagu sebelumnya">
                     <i class="fa-solid fa-backward-step"></i>
                 </button>
-                <button class="control-btn play-btn" id="playPauseBtn" onclick="togglePlay()" title="Putar / Jeda" aria-label="Putar atau Jeda">
+                <button class="control-btn play-btn-wide" id="playPauseBtn" onclick="togglePlay()" title="Play / Pause" aria-label="Putar atau jeda">
                     <i class="fa-solid fa-play"></i>
                 </button>
-                <button class="control-btn" onclick="nextSong()" title="Lagu Selanjutnya" aria-label="Selanjutnya">
+                <button class="control-btn" id="nextBtn" onclick="nextSong()" title="Lagu Selanjutnya" aria-label="Lagu selanjutnya">
                     <i class="fa-solid fa-forward-step"></i>
-                </button>
-                <button class="control-btn" onclick="playRandomSong()" title="Putar Acak" aria-label="Putar Acak">
-                    <i class="fa-solid fa-shuffle"></i>
                 </button>
             </div>
 
-            <div class="options-row">
-                <label class="toggle-option">
-                    <input type="checkbox" id="autoplayToggle" checked>
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Autoplay</span>
-                </label>
+            <!-- Autoplay & FX -->
+            <div class="player-subsettings">
+                <div class="subsettings-row">
+                    <div class="autoplay-toggle">
+                        <input type="checkbox" id="autoplayToggle" checked>
+                        <label for="autoplayToggle">Autoplay</label>
+                    </div>
+                    <button class="fx-toggle-btn active" id="fxToggleBtn" onclick="toggleAudioFX()" title="Efek reverb & EQ">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> FX ON
+                    </button>
+                </div>
 
-                <label class="toggle-option">
-                    <input type="checkbox" id="fxToggle" checked onchange="toggleAudioFX()">
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label"><i class="fa-solid fa-wand-magic-sparkles"></i> FX</span>
-                </label>
-
+                <!-- Volume di baris sendiri, penuh, biar enak dipakai di HP/tablet -->
                 <div class="volume-row">
                     <i class="fa-solid fa-volume-high"></i>
                     <input type="range" id="musicVolume" min="0" max="1" step="0.01" value="0.8" oninput="adjustMusicVolume()" aria-label="Volume musik">
@@ -66,23 +67,29 @@
             </div>
         </header>
 
+        <!-- Tabs Navigation -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('all', event)">Daftar Playlist</button>
+            <button class="tab-btn active" onclick="switchTab('all', event)">Daftar Lagu</button>
             <button class="tab-btn" onclick="switchTab('queue', event)">Antrean<span class="queue-badge" id="queueBadge"></span></button>
         </div>
 
+        <!-- Search Bar -->
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text" id="searchInput" placeholder="Cari lagu atau penyanyi..." onkeyup="filterSongs()" aria-label="Cari lagu">
         </div>
 
+        <!-- Song List -->
         <div class="song-list" id="songList">
-            </div>
+            <!-- Rendered by JS -->
+        </div>
 
     </div>
 
+    <!-- Hidden Audio Element -->
     <audio id="audioPlayer" crossorigin="anonymous"></audio>
 
+    <!-- Fullscreen Toggle -->
     <button id="fullscreenBtn" onclick="toggleFullscreen()" title="Full Screen" class="control-btn" aria-label="Layar penuh">
         <i class="fa-solid fa-expand"></i>
     </button>
