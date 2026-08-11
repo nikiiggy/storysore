@@ -1,10 +1,15 @@
-// --- 1. CONFIG: LINK API PLAYLIST ---
-const PLAYLIST_API_URL = "https://api.npoint.io/f24ffd31e695999ad25c";
+// --- PLAYLIST SOURCE ---
+// Playlist lagu diambil dari npoint.io, BUKAN hardcode di sini.
+// Mau nambah/ubah lagu? Buka URL ini, edit langsung di editornya, save.
+// Format tiap item wajib: { "title": "...", "src": "https://..." }
+const PLAYLIST_URL = "https://api.npoint.io/f24ffd31e695999ad25c";
 
-let songs = []; // Data lagu diisi dari npoint
-let playQueue = []; // Antrean lagu
-let currentSong = null; // Lagu yang sedang diputar
-let currentTab = 'all'; // 'all' | 'queue'
+let songs = []; // diisi oleh loadPlaylist()
+
+let currentSong = null;   // lagu yang sedang dimuat/diputar (tidak lagi ada di playQueue)
+let playQueue = [];       // antrean lagu berikutnya (FIFO, hanya yang BELUM diputar)
+let historyStack = [];    // riwayat lagu yang sudah lewat, dipakai tombol Prev, TIDAK ditampilkan di UI
+let currentTab = 'all';   // 'all' | 'queue'
 
 // DOM Elements
 const audioPlayer = document.getElementById('audioPlayer');
@@ -14,7 +19,7 @@ const playPauseBtn = document.getElementById('playPauseBtn');
 const progressBar = document.getElementById('progressBar');
 const currentTimeEl = document.getElementById('currentTime');
 const durationEl = document.getElementById('duration');
-const fxToggle = document.getElementById('fxToggle');
+const fxToggleBtn = document.getElementById('fxToggleBtn');
 const visualizerCanvas = document.getElementById('visualizer');
 const visCtx = visualizerCanvas ? visualizerCanvas.getContext('2d') : null;
 const queueBadge = document.getElementById('queueBadge');
@@ -26,6 +31,7 @@ let lowFilter, midFilter, highFilter;
 let wetGain, dryGain, masterGain;
 let analyser, analyserData;
 let isAudioFxInitialized = false;
+let fxEnabled = true;
 let fxSilenceChecked = false;
 let visRafId = null;
 
@@ -83,10 +89,13 @@ function initAudioEffects() {
 
         isAudioFxInitialized = true;
     } catch (e) {
-        console.warn("Web Audio API tidak tersedia / diblokir.", e);
+        console.warn("Web Audio API tidak tersedia / diblokir. Player standar tetap dipakai.", e);
     }
 }
 
+// Jika host lagu (catbox) tidak mengirim header CORS, graph Web Audio akan
+// diam total (spec-compliant tainted-audio behaviour) meski tidak melempar error.
+// Deteksi kondisi itu sekali per lagu lalu bypass ke koneksi langsung.
 function checkFxSilence() {
     if (!isAudioFxInitialized || !analyser || fxSilenceChecked) return;
     fxSilenceChecked = true;
@@ -100,6 +109,11 @@ function checkFxSilence() {
                 sourceNode.disconnect();
                 sourceNode.connect(masterGain);
                 masterGain.gain.value = 1.0;
+                console.warn("Lagu ini diproteksi CORS oleh host, efek audio dinonaktifkan otomatis untuk lagu ini.");
+                if (fxToggleBtn) {
+                    fxToggleBtn.classList.add('disabled');
+                    fxToggleBtn.title = "Efek audio tidak tersedia untuk lagu ini (CORS)";
+                }
             } catch (e) { /* noop */ }
         }
     }, 700);
@@ -130,44 +144,38 @@ function createReverbImpulse(decay, density, diffusion) {
 }
 
 function toggleAudioFX() {
-    const isFxOn = fxToggle ? fxToggle.checked : true;
+    fxEnabled = !fxEnabled;
+    if (fxToggleBtn) {
+        fxToggleBtn.classList.toggle('active', fxEnabled);
+        fxToggleBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> FX ${fxEnabled ? 'ON' : 'OFF'}`;
+    }
     if (!isAudioFxInitialized || !audioCtx) return;
     const now = audioCtx.currentTime;
-    wetGain.gain.setTargetAtTime(isFxOn ? Math.pow(10, -8 / 20) : 0, now, 0.15);
-    lowFilter.gain.setTargetAtTime(isFxOn ? 3 : 0, now, 0.15);
-    highFilter.gain.setTargetAtTime(isFxOn ? -10 : 0, now, 0.15);
+    wetGain.gain.setTargetAtTime(fxEnabled ? Math.pow(10, -8 / 20) : 0, now, 0.15);
+    lowFilter.gain.setTargetAtTime(fxEnabled ? 3 : 0, now, 0.15);
+    highFilter.gain.setTargetAtTime(fxEnabled ? -10 : 0, now, 0.15);
 }
 
-// --- FETCH PLAYLIST DATA FROM API ---
-async function fetchPlaylist() {
+// --- PLAYLIST LOADING (dari npoint.io) ---
+async function loadPlaylist() {
+    songListEl.innerHTML = '<div class="empty-state">Memuat daftar lagu...</div>';
     try {
-        if (songListEl) {
-            songListEl.innerHTML = '<div class="empty-state">Memuat daftar lagu...</div>';
-        }
-
-        const response = await fetch(PLAYLIST_API_URL);
-        if (!response.ok) throw new Error("Gagal mengambil data dari npoint.");
-
-        const data = await response.json();
-
-        songs = data.map((song, index) => ({
-            id: song.id || index + 1,
-            title: song.title || "Unknown Title",
-            src: song.src || ""
-        }));
-
-        renderSongs();
-    } catch (error) {
-        console.error("Error fetching playlist:", error);
-        if (songListEl) {
-            songListEl.innerHTML = '<div class="empty-state" style="color: #ff6b6b;">Gagal memuat lagu dari server.</div>';
-        }
+        const res = await fetch(PLAYLIST_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        songs = data.map((s, i) => ({ id: i + 1, title: s.title, src: s.src }));
+    } catch (e) {
+        console.error("Gagal memuat playlist dari npoint:", e);
+        songListEl.innerHTML = '<div class="empty-state">Gagal memuat daftar lagu. Coba refresh halaman.</div>';
+        showToast('Gagal memuat playlist', 'fa-triangle-exclamation');
+        return;
     }
+    renderSongs();
 }
 
 // --- App Initialization ---
-window.onload = () => {
-    fetchPlaylist();
+window.onload = async () => {
+    await loadPlaylist();
     initFireflies();
 
     document.body.addEventListener('click', () => {
@@ -200,15 +208,17 @@ function showToast(message, icon = 'fa-list-ul') {
 
 // --- Render Song / Queue List ---
 function renderSongs() {
-    if (!songListEl) return;
     songListEl.innerHTML = '';
 
-    const list = currentTab === 'queue' ? playQueue : songs;
+    const isQueueTab = currentTab === 'queue';
+    const list = isQueueTab ? playQueue : songs;
 
     if (list.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
-        empty.textContent = currentTab === 'queue' ? 'Antrean kosong. Pilih lagu dari Playlist.' : 'Lagu tidak ditemukan.';
+        empty.textContent = isQueueTab
+            ? 'Antrean kosong. Pilih lagu dari Daftar Lagu.'
+            : 'Lagu tidak ditemukan.';
         songListEl.appendChild(empty);
         return;
     }
@@ -216,11 +226,13 @@ function renderSongs() {
     const fragment = document.createDocumentFragment();
     list.forEach((song, i) => {
         const item = document.createElement('div');
-        const isPlayingThis = currentSong?.id === song.id;
-        item.className = `song-item ${isPlayingThis ? 'active' : ''}`;
+        const isCurrentSong = !isQueueTab && currentSong?.id === song.id;
+        item.className = `song-item ${isCurrentSong ? 'active' : ''}`;
 
-        const clickAction = currentTab === 'queue' ? `playNextInQueue()` : `addToQueue(${song.id})`;
-        const numberLabel = currentTab === 'queue' ? `<span class="queue-index">${i + 1}</span>` : `<i class="fa-solid fa-music"></i>`;
+        const clickAction = isQueueTab ? `playFromQueue(${i})` : `addToQueue(${song.id})`;
+        const numberLabel = isQueueTab
+            ? `<span class="queue-index">${i + 1}</span>`
+            : `<i class="fa-solid fa-music"></i>`;
 
         item.innerHTML = `
             <div class="song-info" onclick="${clickAction}">
@@ -258,48 +270,60 @@ function filterSongs() {
 }
 
 // --- QUEUE & PLAYER CONTROLS ---
+
+// Klik lagu dari Daftar Lagu -> masuk ke ujung antrean.
 function addToQueue(id) {
     const song = songs.find(s => s.id === id);
     if (!song) return;
 
     playQueue.push(song);
-    showToast(`Masuk Antrean: ${song.title}`, 'fa-list-ul');
+    showToast(`Ditambahkan ke antrean: ${song.title}`, 'fa-list-ul');
     updateQueueBadge();
 
-    // Jika pemutar sedang berhenti, langsung putar lagu dari antrean
-    if (audioPlayer.paused && !currentSong) {
-        playNextInQueue();
+    if (currentSong === null) {
+        // Belum ada yang diputar sama sekali -> langsung muat lagu ini (tanpa auto-play).
+        advanceToNext(false);
     } else {
         renderSongs();
     }
 }
 
-// Memutar lagu dari antrean DAN MENGHAPUSNYA DARI ANTREAN
-function playNextInQueue() {
-    if (playQueue.length > 0) {
-        currentSong = playQueue.shift(); // Ambil dan hapus lagu paling depan di antrean
-        updateQueueBadge();
-        loadAndPlay(currentSong);
-    } else {
-        playRandomSong(); // Jika antrean habis, play random
+// Pindah ke lagu berikutnya: ambil dari depan antrean (lalu lagu itu HILANG dari antrean),
+// atau kalau antrean kosong, putar lagu acak.
+function advanceToNext(autoPlay = true) {
+    if (currentSong !== null) {
+        historyStack.push(currentSong);
     }
+
+    if (playQueue.length > 0) {
+        currentSong = playQueue.shift();
+    } else {
+        currentSong = songs[Math.floor(Math.random() * songs.length)];
+        showToast(`Memutar acak: ${currentSong.title}`, 'fa-shuffle');
+    }
+
+    loadCurrentSong();
+    updateQueueBadge();
+    if (autoPlay) playCurrent();
 }
 
-function playRandomSong() {
-    if (songs.length === 0) return;
-    const randomSong = songs[Math.floor(Math.random() * songs.length)];
-    currentSong = randomSong;
-    showToast(`Memutar acak: ${randomSong.title}`, 'fa-shuffle');
-    loadAndPlay(currentSong);
+// Klik lagu langsung dari tab Antrean -> putar sekarang, keluar dari antrean.
+function playFromQueue(index) {
+    if (index < 0 || index >= playQueue.length) return;
+    const song = playQueue.splice(index, 1)[0];
+    if (currentSong !== null) historyStack.push(currentSong);
+    currentSong = song;
+    loadCurrentSong();
+    updateQueueBadge();
+    playCurrent();
 }
 
-function loadAndPlay(song) {
-    if (!song) return;
-    audioPlayer.src = song.src;
-    currentTitleEl.innerText = song.title;
+function loadCurrentSong() {
+    if (!currentSong) return;
+    audioPlayer.src = currentSong.src;
+    currentTitleEl.innerText = currentSong.title;
     fxSilenceChecked = false;
     renderSongs();
-    playCurrent();
 }
 
 function playCurrent() {
@@ -325,8 +349,8 @@ function pauseCurrent() {
 }
 
 function togglePlay() {
-    if (!currentSong) {
-        playNextInQueue();
+    if (currentSong === null) {
+        advanceToNext(true); // antrean isi -> ambil depan; antrean kosong -> acak
         return;
     }
     if (audioPlayer.paused) {
@@ -336,19 +360,23 @@ function togglePlay() {
     }
 }
 
+// Next SELALU langsung memutar lagu berikutnya, apapun status play/pause sebelumnya.
 function nextSong() {
-    playNextInQueue();
+    advanceToNext(true);
 }
 
+// Prev pakai riwayat tersembunyi (bukan antrean) karena lagu yang sudah lewat
+// sengaja tidak ditampilkan lagi di daftar antrean.
 function prevSong() {
-    if (audioPlayer.currentTime > 3) {
-        audioPlayer.currentTime = 0;
-    } else {
-        playRandomSong();
-    }
+    if (historyStack.length === 0) return;
+    if (currentSong !== null) playQueue.unshift(currentSong);
+    currentSong = historyStack.pop();
+    loadCurrentSong();
+    updateQueueBadge();
+    playCurrent();
 }
 
-// --- Progress Bar & Autoplay ---
+// --- Progress Bar ---
 audioPlayer.ontimeupdate = () => {
     if (!isNaN(audioPlayer.duration)) {
         progressBar.max = audioPlayer.duration;
@@ -359,9 +387,8 @@ audioPlayer.ontimeupdate = () => {
 };
 
 audioPlayer.onended = () => {
-    const autoplay = document.getElementById('autoplayToggle');
-    if (autoplay && autoplay.checked) {
-        playNextInQueue(); // Memutar antrean berikutnya (atau random jika antrean habis)
+    if (document.getElementById('autoplayToggle').checked) {
+        nextSong();
     } else {
         playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
         playPauseBtn.classList.remove('is-playing');
@@ -456,7 +483,7 @@ function resizeVisualizer() {
 }
 window.addEventListener('resize', resizeVisualizer);
 
-// --- FIREFLY AMBIENT PARTICLES ---
+// --- FIREFLY AMBIENT PARTICLES (lightweight canvas, no libraries) ---
 function initFireflies() {
     const canvas = document.getElementById('fireflyCanvas');
     if (!canvas) return;
