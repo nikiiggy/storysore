@@ -37,6 +37,8 @@ html, body {
 }
 
 /* ---------- Background layers ---------- */
+/* z-index dijaga tetap 0/positif (bukan negatif) supaya tidak ketutup
+   background-color body akibat stacking-context quirk di beberapa browser. */
 .bg-overlay {
     position: fixed;
     inset: 0;
@@ -303,25 +305,25 @@ html, body {
 /* Tabs */
 .tabs {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     margin-bottom: 10px;
 }
 
 .tab-btn {
     flex: 1;
-    padding: 7px 4px;
+    padding: 8px;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid transparent;
     color: var(--text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;
     font-weight: 600;
-    font-size: 0.74rem;
+    font-size: 0.8rem;
     transition: background 0.2s ease, color 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 6px;
     white-space: nowrap;
 }
 
@@ -334,11 +336,11 @@ html, body {
 .queue-badge {
     background: rgba(255, 255, 255, 0.15);
     color: var(--text-primary);
-    font-size: 0.62rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    min-width: 15px;
-    height: 15px;
-    line-height: 15px;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
     border-radius: 999px;
     padding: 0 4px;
 }
@@ -432,6 +434,7 @@ html, body {
     gap: 8px;
     font-size: 0.8rem;
     overflow: hidden;
+    width: 100%;
 }
 
 .song-info i {
@@ -459,21 +462,6 @@ html, body {
     color: var(--text-faint);
     font-size: 0.8rem;
     padding: 18px 0;
-}
-
-.star-btn {
-    color: var(--text-faint);
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: color 0.2s ease, transform 0.2s ease;
-}
-
-.star-btn:hover {
-    transform: scale(1.15);
-}
-
-.star-btn.starred {
-    color: var(--ember-soft);
 }
 
 /* Fullscreen button */
@@ -543,48 +531,4 @@ html, body {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
-}
-
-/* Styling untuk Toggle Switch Options */
-.toggle-option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    user-select: none;
-}
-
-.toggle-option input[type="checkbox"] {
-    display: none;
-}
-
-.toggle-slider {
-    width: 34px;
-    height: 18px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 999px;
-    position: relative;
-    transition: background 0.3s ease;
-}
-
-.toggle-slider::before {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    background: #fff;
-    border-radius: 50%;
-    transition: transform 0.3s ease;
-}
-
-.toggle-option input[type="checkbox"]:checked + .toggle-slider {
-    background: var(--ember);
-}
-
-.toggle-option input[type="checkbox"]:checked + .toggle-slider::before {
-    transform: translateX(16px);
 }
