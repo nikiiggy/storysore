@@ -551,3 +551,11 @@ function initFireflies() {
 }
 
 resizeVisualizer();
+
+// Tambahkan di script.js agar nama lagu & kontrol muncul di notifikasi HP
+if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', () => togglePlay());
+    navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+    navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+    navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+}
