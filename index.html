@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>STORYSORE — Web Storysore Player Pro</title>
-    <meta name="description" content="Pemutar musik Storysore dengan Galau Mode, Aurora Ambient, dan Equalizer Modern.">
+    <meta name="description" content="Pemutar musik Storysore dengan Galau Mode, Party Mode, dan Mode Hemat Performa Ringan.">
     <meta name="theme-color" content="#08090d">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -312,7 +312,7 @@
             transition: color 0.3s ease;
         }
 
-        /* Toggle Switches (Party Mode, Galau Mode & Sound FX) */
+        /* Toggle Switches */
         .fx-toggle {
             display: flex;
             justify-content: space-between;
@@ -670,7 +670,7 @@
             border-color: var(--party-border);
         }
 
-        /* ==================== GALAU MODE (AURORA & INDIGO LAVENDER BEAT) ==================== */
+        /* ==================== GALAU MODE ==================== */
         body.galau-active {
             background-color: #070913;
             background-image: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.25), transparent 70%),
@@ -764,6 +764,26 @@
         body.galau-active .toast {
             border-color: var(--galau-color);
         }
+
+        /* ==================== LOW PERFORMANCE MODE (RINGAN UNTUK HP LEMOT) ==================== */
+        body.low-perf *,
+        body.low-perf .app-container,
+        body.low-perf .player-panel,
+        body.low-perf .art-container,
+        body.low-perf .audio-settings,
+        body.low-perf .tabs {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
+        body.low-perf .app-container {
+            background: rgba(12, 14, 22, 0.96) !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+        }
+
+        body.low-perf .player-panel {
+            background: rgba(0, 0, 0, 0.45) !important;
+        }
     </style>
 </head>
 <body>
@@ -831,6 +851,15 @@
                     </label>
                 </div>
 
+                <!-- Mode Hemat (Performa Ringan) -->
+                <div class="fx-toggle">
+                    <span><i class="fa-solid fa-gauge-simple-high"></i> Mode Hemat (HP Lemot)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="lowPerfSwitch" onchange="toggleLowPerfMode()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
                 <!-- Sound FX Toggle (OTOMATIS AKTIF) -->
                 <div class="fx-toggle">
                     <span><i class="fa-solid fa-wand-magic-sparkles"></i> Sound FX</span>
@@ -888,6 +917,7 @@
         let repeatMode = 0; // 0: Off, 1: Repeat All, 2: Repeat One
         let isPartyMode = false;
         let isGalauMode = false;
+        let isLowPerfMode = false; // Status Mode Hemat Performa
         let sleepTimerMinutes = 0;
         let sleepTimerTimeout = null;
 
@@ -1183,6 +1213,12 @@
             }
         }
 
+        function toggleLowPerfMode() {
+            isLowPerfMode = document.getElementById('lowPerfSwitch').checked;
+            document.body.classList.toggle('low-perf', isLowPerfMode);
+            showToast(isLowPerfMode ? "Mode Hemat AKTIF ⚡ (Ringan di HP/Tab)" : "Mode Hemat NONAKTIF");
+        }
+
         function toggleAudioFX() {
             const isChecked = document.getElementById('fxSwitch').checked;
             if (eqFilter) {
@@ -1327,7 +1363,7 @@
 
             currentBassAvg = audioPlayer.paused ? 0 : bassSum / 6;
 
-            // Galau Mode Indigo Lavender Light Glow Synchronization (Hanya Lampu Berdenyut, UI Diam)
+            // Galau Mode Indigo Lavender Light Glow Synchronization
             if (isGalauMode && !audioPlayer.paused) {
                 const glowAlpha = 0.25 + (currentBassAvg / 255) * 0.55;
                 const borderAlpha = 0.4 + (currentBassAvg / 255) * 0.55;
@@ -1336,26 +1372,31 @@
                 document.documentElement.style.setProperty('--galau-border', `rgba(165, 180, 252, ${borderAlpha})`);
             }
 
-            // Party Mode Dynamic Lighting Sync (Hanya Lampu Berdenyut, UI Diam)
+            // Party Mode Dynamic Lighting Sync
             if (isPartyMode && !audioPlayer.paused) {
                 partyHue = (partyHue + (currentBassAvg > 80 ? currentBassAvg / 30 : 1.5)) % 360;
 
                 document.documentElement.style.setProperty('--party-hue', partyHue);
 
                 const glowIntensity = 0.2 + (currentBassAvg / 255) * 0.5;
-                document.body.style.backgroundImage = `
-                    radial-gradient(circle at 50% 30%, hsla(${partyHue}, 100%, 50%, ${glowIntensity}), transparent 60%),
-                    radial-gradient(circle at 80% 80%, hsla(${(partyHue + 120) % 360}, 100%, 50%, ${glowIntensity * 0.7}), transparent 50%),
-                    radial-gradient(circle at 20% 70%, hsla(${(partyHue + 240) % 360}, 100%, 50%, ${glowIntensity * 0.6}), transparent 50%)
-                `;
+                if (!isLowPerfMode) {
+                    document.body.style.backgroundImage = `
+                        radial-gradient(circle at 50% 30%, hsla(${partyHue}, 100%, 50%, ${glowIntensity}), transparent 60%),
+                        radial-gradient(circle at 80% 80%, hsla(${(partyHue + 120) % 360}, 100%, 50%, ${glowIntensity * 0.7}), transparent 50%),
+                        radial-gradient(circle at 20% 70%, hsla(${(partyHue + 240) % 360}, 100%, 50%, ${glowIntensity * 0.6}), transparent 50%)
+                    `;
+                }
             }
         }
 
-        // --- AURORA BOREALIS ANIMATION ENGINE ---
+        // --- AURORA BOREALIS ANIMATION ENGINE (DI-OPTIMASI UNTUK MODE HEMAT) ---
         function drawAurora(ctx, width, height, avgBass) {
             auroraTime += 0.005 + (avgBass / 255) * 0.004;
 
-            const layers = [
+            // Di Mode Hemat, hanya gambar 1 gelombang dengan pangkasan kalkulasi titik
+            const layers = isLowPerfMode ? [
+                { colorStart: 'rgba(99, 102, 241, 0.35)', colorEnd: 'rgba(165, 180, 252, 0)', yOffset: height * 0.3, amplitude: 40, speed: 1 }
+            ] : [
                 { colorStart: 'rgba(79, 70, 229, 0.35)', colorEnd: 'rgba(129, 140, 248, 0)', yOffset: height * 0.2, amplitude: 50, speed: 1 },
                 { colorStart: 'rgba(147, 51, 234, 0.28)', colorEnd: 'rgba(192, 132, 252, 0)', yOffset: height * 0.32, amplitude: 70, speed: 0.7 },
                 { colorStart: 'rgba(99, 102, 241, 0.3)', colorEnd: 'rgba(165, 180, 252, 0)', yOffset: height * 0.42, amplitude: 60, speed: 1.2 }
@@ -1363,6 +1404,8 @@
 
             ctx.save();
             ctx.globalCompositeOperation = 'screen';
+
+            const xStep = isLowPerfMode ? 28 : 12; // Rendering lebih renggang saat Mode Hemat
 
             layers.forEach((layer) => {
                 const grad = ctx.createLinearGradient(0, layer.yOffset - 100, 0, layer.yOffset + 300);
@@ -1373,7 +1416,7 @@
                 ctx.beginPath();
                 ctx.moveTo(0, height);
 
-                for (let x = 0; x <= width; x += 12) {
+                for (let x = 0; x <= width; x += xStep) {
                     const wave1 = Math.sin(x * 0.003 + auroraTime * layer.speed) * (layer.amplitude + avgBass * 0.15);
                     const wave2 = Math.cos(x * 0.006 - auroraTime * 0.5 * layer.speed) * (layer.amplitude * 0.5);
                     const y = layer.yOffset + wave1 + wave2;
@@ -1422,7 +1465,11 @@
                     drawAurora(ctx, canvas.width, canvas.height, currentBassAvg);
                 }
 
-                particles.forEach((p, idx) => {
+                // Kurangi partikel yang digambar dari 60 menjadi 15 jika Mode Hemat aktif
+                const activeParticlesCount = isLowPerfMode ? 15 : particles.length;
+
+                for (let i = 0; i < activeParticlesCount; i++) {
+                    const p = particles[i];
                     let speedMultiplier = isPartyMode ? 2.5 : (isGalauMode ? 0.45 : 1);
                     
                     p.x += p.vx * speedMultiplier;
@@ -1438,13 +1485,13 @@
                     if (isGalauMode) {
                         ctx.fillStyle = `rgba(165, 180, 252, ${p.alpha * 0.85})`;
                     } else if (isPartyMode) {
-                        ctx.fillStyle = `hsla(${(partyHue + idx * 8) % 360}, 100%, 65%, ${p.alpha * 0.95})`;
+                        ctx.fillStyle = `hsla(${(partyHue + i * 8) % 360}, 100%, 65%, ${p.alpha * 0.95})`;
                     } else {
                         ctx.fillStyle = `rgba(255, 179, 122, ${p.alpha})`;
                     }
                     
                     ctx.fill();
-                });
+                }
                 requestAnimationFrame(animate);
             }
             animate();
